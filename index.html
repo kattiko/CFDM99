@@ -311,16 +311,9 @@
                 currentSelection: null,
                 selectionStep: 0,
                 usedImages: [],
-                poolType: 'main' // 'main' for 1-50, 'bonus' for 1-12
+                poolType: 'main'
             },
-            availableImages: [
-                'choice1.jpg', 'choice2.jpg', 'choice3.jpg', 'choice4.jpg', 'choice5.jpg',
-                'choice6.jpg', 'choice7.jpg', 'choice8.jpg', 'choice9.jpg', 'choice10.jpg',
-                'choice11.jpg', 'choice12.jpg', 'choice13.jpg', 'choice14.jpg', 'choice15.jpg',
-                'choice16.jpg', 'choice17.jpg', 'choice18.jpg', 'choice19.jpg', 'choice20.jpg',
-                'choice21.jpg', 'choice22.jpg', 'choice23.jpg', 'choice24.jpg', 'choice25.jpg',
-                'choice26.jpg', 'choice27.jpg', 'choice28.jpg', 'choice29.jpg', 'choice30.jpg'
-            ],
+            availableImages: Array.from({length: 555}, (_, i) => `choice${i + 1}.jpg`),
 
             init() {
                 this.loadConfig();
@@ -372,11 +365,9 @@
                 const numbersSelected = this.gameState.selectedNumbers.length;
                 
                 if (numbersSelected < 5) {
-                    // Selecting from pool 1-50
                     this.gameState.currentPool = Array.from({length: 50}, (_, i) => i + 1);
                     this.gameState.poolType = 'main';
                 } else {
-                    // Selecting from pool 1-12
                     this.gameState.currentPool = Array.from({length: 12}, (_, i) => i + 1);
                     this.gameState.poolType = 'bonus';
                 }
@@ -389,20 +380,16 @@
                 const pool = this.gameState.currentPool;
                 const numbersSelected = this.gameState.selectedNumbers.length;
                 
-                // Update progress
                 document.getElementById('progressBar').style.width = `${(numbersSelected / 7) * 100}%`;
                 document.getElementById('progressBar').textContent = `${numbersSelected}/7`;
                 
-                // Update info
                 const poolName = this.gameState.poolType === 'main' ? '1-50' : '1-12';
                 document.getElementById('selectionInfo').textContent = 
                     `Selecting number ${numbersSelected + 1} of 7 (Pool: ${poolName})`;
                 
-                // Update selected numbers display
                 this.updateSelectedNumbersDisplay();
                 
                 if (pool.length === 1) {
-                    // Final number selected
                     this.gameState.selectedNumbers.push(pool[0]);
                     this.updateSelectedNumbersDisplay();
                     
@@ -414,11 +401,9 @@
                     return;
                 }
                 
-                // Create groups
                 const numGroups = Math.min(5, pool.length);
                 const groups = this.divideIntoGroups(pool, numGroups);
                 
-                // Display image choices
                 this.displayImageChoices(groups);
             },
 
@@ -462,7 +447,6 @@
             getRandomImage() {
                 const available = this.availableImages.filter(img => !this.gameState.usedImages.includes(img));
                 if (available.length === 0) {
-                    // Reset if we run out
                     this.gameState.usedImages = [];
                     return this.availableImages[Math.floor(Math.random() * this.availableImages.length)];
                 }
@@ -472,12 +456,10 @@
             },
 
             selectImage(element, group) {
-                // Remove previous selection
                 document.querySelectorAll('.image-choice').forEach(el => {
                     el.classList.remove('selected');
                 });
                 
-                // Mark new selection
                 element.classList.add('selected');
                 this.gameState.currentSelection = group;
                 document.getElementById('proceedBtn').disabled = false;
@@ -509,13 +491,8 @@
                 document.getElementById('loadingResults').classList.remove('hidden');
                 
                 try {
-                    // Submit to GitHub Issues
                     await this.submitToGitHub();
-                    
-                    // Analyze results
                     const analysis = await this.analyzeResults();
-                    
-                    // Display results
                     this.displayResults(analysis);
                 } catch (error) {
                     document.getElementById('resultsContent').innerHTML = 
@@ -564,7 +541,6 @@
             },
 
             async analyzeResults() {
-                // Fetch all issues
                 const headers = {
                     'Accept': 'application/vnd.github.v3+json'
                 };
@@ -584,11 +560,9 @@
                 
                 const issues = await response.json();
                 
-                // Parse all number selections
                 const allSelections = [];
                 const numberFrequency = { main: {}, bonus: {} };
                 
-                // Initialize frequency counters
                 for (let i = 1; i <= 50; i++) numberFrequency.main[i] = 0;
                 for (let i = 1; i <= 12; i++) numberFrequency.bonus[i] = 0;
                 
@@ -606,7 +580,6 @@
                     }
                 });
                 
-                // Calculate statistics
                 const totalSelections = allSelections.length;
                 const expectedMainFreq = totalSelections * (5 / 50);
                 const expectedBonusFreq = totalSelections * (2 / 12);
@@ -616,7 +589,6 @@
                     bonus: this.gameState.selectedNumbers.slice(5, 7)
                 };
                 
-                // Analysis
                 const analysis = {
                     totalSelections,
                     aboveAverageCount: 0,
@@ -627,7 +599,6 @@
                     expectedBonusFreq
                 };
                 
-                // Count how many numbers are above 20% deviation
                 currentSelection.main.forEach(num => {
                     if (numberFrequency.main[num] > expectedMainFreq * 1.2) {
                         analysis.aboveAverageCount++;
@@ -640,7 +611,6 @@
                     }
                 });
                 
-                // Find duplicates
                 allSelections.forEach((selection, index) => {
                     const matchesMain = JSON.stringify(selection.main.sort()) === 
                                        JSON.stringify(currentSelection.main.sort());
@@ -672,14 +642,12 @@
                 let html = '<div class="results-section">';
                 html += '<h2>🎯 Your Selection Results</h2>';
                 
-                // Show selected numbers
                 html += '<div class="stat-item">';
                 html += '<strong>Your Numbers:</strong><br>';
                 html += `Main: ${analysis.currentSelection.main.join(', ')}<br>`;
                 html += `Bonus: ${analysis.currentSelection.bonus.join(', ')}`;
                 html += '</div>';
                 
-                // Show statistics
                 html += '<div class="stat-item">';
                 html += `<strong>Total Selections in Database:</strong> ${analysis.totalSelections}`;
                 html += '</div>';
@@ -730,7 +698,6 @@
             }
         };
 
-        // Initialize app on page load
         window.onload = () => app.init();
     </script>
 </body>
