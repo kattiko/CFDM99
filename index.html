@@ -220,6 +220,109 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+
+        .statistics-section {
+            background: #f0f8ff;
+            padding: 30px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border: 2px solid #667eea;
+        }
+
+        .statistics-section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            margin-top: 20px;
+        }
+
+        .statistics-section h3:first-child {
+            margin-top: 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .stats-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .stats-card .number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stats-card .label {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .stats-card .deviation {
+            color: #764ba2;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+
+        .duplicate-combo {
+            background: white;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border-left: 4px solid #ff9800;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .duplicate-combo.high-frequency {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+
+        .combo-numbers {
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .combo-count {
+            background: #ff9800;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .duplicate-combo.high-frequency .combo-count {
+            background: #f44336;
+        }
+
+        .toggle-stats-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1em;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 15px auto;
+            display: block;
+            font-weight: bold;
+        }
+
+        .toggle-stats-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body>
@@ -621,6 +724,7 @@
                 
                 const allSelections = [];
                 const numberFrequency = { main: {}, bonus: {} };
+                const comboFrequency = {};  // NEW: Track combination frequencies
                 
                 for (let i = 1; i <= 50; i++) numberFrequency.main[i] = 0;
                 for (let i = 1; i <= 12; i++) numberFrequency.bonus[i] = 0;
@@ -636,6 +740,10 @@
                         
                         mainNumbers.forEach(num => numberFrequency.main[num]++);
                         bonusNumbers.forEach(num => numberFrequency.bonus[num]++);
+                        
+                        // NEW: Track combination frequency
+                        const comboKey = `${mainNumbers.join('-')} + ${bonusNumbers.join('-')}`;
+                        comboFrequency[comboKey] = (comboFrequency[comboKey] || 0) + 1;
                     }
                 });
                 
@@ -659,6 +767,31 @@
                     bonus: bonusNumbers
                 };
                 
+                // NEW: Calculate top numbers by deviation
+                const mainDeviations = [];
+                for (let i = 1; i <= 50; i++) {
+                    const actual = numberFrequency.main[i];
+                    const expected = expectedMainFreq;
+                    const deviation = expected > 0 ? ((actual - expected) / expected) * 100 : 0;
+                    mainDeviations.push({ number: i, frequency: actual, deviation });
+                }
+                mainDeviations.sort((a, b) => b.deviation - a.deviation);
+                
+                const bonusDeviations = [];
+                for (let i = 1; i <= 12; i++) {
+                    const actual = numberFrequency.bonus[i];
+                    const expected = expectedBonusFreq;
+                    const deviation = expected > 0 ? ((actual - expected) / expected) * 100 : 0;
+                    bonusDeviations.push({ number: i, frequency: actual, deviation });
+                }
+                bonusDeviations.sort((a, b) => b.deviation - a.deviation);
+                
+                // NEW: Find combinations selected more than once
+                const duplicateCombos = Object.entries(comboFrequency)
+                    .filter(([combo, count]) => count > 1)
+                    .map(([combo, count]) => ({ combo, count }))
+                    .sort((a, b) => b.count - a.count);
+                
                 const analysis = {
                     totalSelections,
                     aboveAverageCount: 0,
@@ -666,7 +799,10 @@
                     currentSelection,
                     numberFrequency,
                     expectedMainFreq,
-                    expectedBonusFreq
+                    expectedBonusFreq,
+                    topMainNumbers: mainDeviations.slice(0, 5),  // NEW
+                    topBonusNumbers: bonusDeviations.slice(0, 2),  // NEW
+                    duplicateCombos  // NEW
                 };
                 
                 currentSelection.main.forEach(num => {
@@ -758,7 +894,66 @@
                 }
                 
                 html += '</div>';
+                
+                // NEW: Add statistics section
+                html += '<button class="toggle-stats-btn" onclick="app.toggleStatistics()">📊 View Detailed Statistics</button>';
+                html += '<div id="statisticsSection" class="statistics-section hidden">';
+                
+                // Duplicate combinations
+                html += '<h3>🔁 Combinations Selected More Than Once</h3>';
+                if (analysis.duplicateCombos.length > 0) {
+                    analysis.duplicateCombos.forEach(item => {
+                        const highFreq = item.count >= 3;
+                        html += `<div class="duplicate-combo ${highFreq ? 'high-frequency' : ''}">`;
+                        html += `<span class="combo-numbers">${item.combo}</span>`;
+                        html += `<span class="combo-count">${item.count}x</span>`;
+                        html += '</div>';
+                    });
+                } else {
+                    html += '<div class="stat-item">No combinations have been selected more than once yet.</div>';
+                }
+                
+                // Top 5 main numbers
+                html += '<h3>📈 Top 5 Numbers (1-50) by Deviation from Average</h3>';
+                html += '<div class="stats-grid">';
+                analysis.topMainNumbers.forEach((item, index) => {
+                    html += '<div class="stats-card">';
+                    html += `<div class="number">#${index + 1}: ${item.number}</div>`;
+                    html += `<div class="label">Frequency: ${item.frequency} times</div>`;
+                    html += `<div class="deviation">${item.deviation >= 0 ? '+' : ''}${item.deviation.toFixed(1)}%</div>`;
+                    html += '</div>';
+                });
+                html += '</div>';
+                
+                // Top 2 bonus numbers
+                html += '<h3>🎲 Top 2 Bonus Numbers (1-12) by Deviation from Average</h3>';
+                html += '<div class="stats-grid">';
+                analysis.topBonusNumbers.forEach((item, index) => {
+                    html += '<div class="stats-card">';
+                    html += `<div class="number">#${index + 1}: ${item.number}</div>`;
+                    html += `<div class="label">Frequency: ${item.frequency} times</div>`;
+                    html += `<div class="deviation">${item.deviation >= 0 ? '+' : ''}${item.deviation.toFixed(1)}%</div>`;
+                    html += '</div>';
+                });
+                html += '</div>';
+                
+                html += '</div>';
+                
                 content.innerHTML = html;
+            },
+            
+            // NEW: Toggle statistics visibility
+            toggleStatistics() {
+                const statsSection = document.getElementById('statisticsSection');
+                const btn = document.querySelector('.toggle-stats-btn');
+                
+                if (statsSection.classList.contains('hidden')) {
+                    statsSection.classList.remove('hidden');
+                    btn.textContent = '📊 Hide Detailed Statistics';
+                } else {
+                    statsSection.classList.add('hidden');
+                    btn.textContent = '📊 View Detailed Statistics';
+                }
             },
 
             reset() {
@@ -782,4 +977,4 @@
         window.onload = () => app.init();
     </script>
 </body>
-    </html>
+</html>
