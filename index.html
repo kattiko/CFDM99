@@ -294,7 +294,9 @@
                 selectionStep: 0,
                 usedImages: [],
                 poolType: 'main',
-                pendingGroups: null
+                pendingGroups: null,
+                selectionSchedule: [],  // NEW: randomized order of pool selections
+                currentScheduleIndex: 0  // NEW: tracks position in schedule
             },
             availableImages: Array.from({length: 555}, (_, i) => `choice${i + 1}.jpg`),
 
@@ -330,6 +332,23 @@
                 }
             },
 
+            // NEW: Create randomized selection schedule
+            createSelectionSchedule() {
+                // Create array with 5 'main' and 2 'bonus'
+                const schedule = [
+                    'main', 'main', 'main', 'main', 'main',
+                    'bonus', 'bonus'
+                ];
+                
+                // Shuffle using Fisher-Yates algorithm
+                for (let i = schedule.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [schedule[i], schedule[j]] = [schedule[j], schedule[i]];
+                }
+                
+                return schedule;
+            },
+
             startSelection() {
                 document.getElementById('targetSection').classList.add('hidden');
                 this.gameState = {
@@ -339,7 +358,9 @@
                     selectionStep: 0,
                     usedImages: [],
                     poolType: 'main',
-                    pendingGroups: null
+                    pendingGroups: null,
+                    selectionSchedule: this.createSelectionSchedule(),  // NEW: create random schedule
+                    currentScheduleIndex: 0
                 };
                 this.startNewNumber();
             },
@@ -364,9 +385,10 @@
             },
 
             startNewNumber() {
-                const numbersSelected = this.gameState.selectedNumbers.length;
+                // MODIFIED: Use the selection schedule instead of counting
+                const poolType = this.gameState.selectionSchedule[this.gameState.currentScheduleIndex];
                 
-                if (numbersSelected < 5) {
+                if (poolType === 'main') {
                     this.gameState.currentPool = Array.from({length: 50}, (_, i) => i + 1);
                     this.gameState.poolType = 'main';
                 } else {
@@ -390,7 +412,12 @@
                     `Selecting number ${numbersSelected + 1} of 7 (Pool: ${poolName})`;
                 
                 if (pool.length === 1) {
-                    this.gameState.selectedNumbers.push(pool[0]);
+                    // MODIFIED: Store number with its pool type
+                    this.gameState.selectedNumbers.push({
+                        number: pool[0],
+                        poolType: this.gameState.poolType
+                    });
+                    this.gameState.currentScheduleIndex++;
                     
                     if (this.gameState.selectedNumbers.length === 7) {
                         this.completeSelection();
@@ -497,9 +524,17 @@
             },
 
             async submitToGitHub() {
-                const numbers = this.gameState.selectedNumbers;
-                const mainNumbers = numbers.slice(0, 5).sort((a, b) => a - b);
-                const bonusNumbers = numbers.slice(5, 7).sort((a, b) => a - b);
+                // MODIFIED: Separate and sort numbers by pool type
+                const mainNumbers = this.gameState.selectedNumbers
+                    .filter(item => item.poolType === 'main')
+                    .map(item => item.number)
+                    .sort((a, b) => a - b);
+                
+                const bonusNumbers = this.gameState.selectedNumbers
+                    .filter(item => item.poolType === 'bonus')
+                    .map(item => item.number)
+                    .sort((a, b) => a - b);
+                
                 const seriesString = `${mainNumbers.join('-')} + ${bonusNumbers.join('-')}`;
                 
                 const issueData = {
@@ -608,9 +643,20 @@
                 const expectedMainFreq = totalSelections * (5 / 50);
                 const expectedBonusFreq = totalSelections * (2 / 12);
                 
+                // MODIFIED: Extract current selection from stored objects
+                const mainNumbers = this.gameState.selectedNumbers
+                    .filter(item => item.poolType === 'main')
+                    .map(item => item.number)
+                    .sort((a, b) => a - b);
+                
+                const bonusNumbers = this.gameState.selectedNumbers
+                    .filter(item => item.poolType === 'bonus')
+                    .map(item => item.number)
+                    .sort((a, b) => a - b);
+                
                 const currentSelection = {
-                    main: this.gameState.selectedNumbers.slice(0, 5),
-                    bonus: this.gameState.selectedNumbers.slice(5, 7)
+                    main: mainNumbers,
+                    bonus: bonusNumbers
                 };
                 
                 const analysis = {
@@ -726,7 +772,9 @@
                     selectionStep: 0,
                     usedImages: [],
                     poolType: 'main',
-                    pendingGroups: null
+                    pendingGroups: null,
+                    selectionSchedule: [],
+                    currentScheduleIndex: 0
                 };
             }
         };
@@ -734,4 +782,4 @@
         window.onload = () => app.init();
     </script>
 </body>
-</html>
+    </html>
