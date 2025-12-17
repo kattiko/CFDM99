@@ -398,8 +398,8 @@
                 usedImages: [],
                 poolType: 'main',
                 pendingGroups: null,
-                selectionSchedule: [],  // NEW: randomized order of pool selections
-                currentScheduleIndex: 0  // NEW: tracks position in schedule
+                selectionSchedule: [],
+                currentScheduleIndex: 0
             },
             availableImages: Array.from({length: 555}, (_, i) => `choice${i + 1}.jpg`),
 
@@ -435,7 +435,6 @@
                 }
             },
 
-            // NEW: Create randomized selection schedule
             createSelectionSchedule() {
                 // Create array with 5 'main' and 2 'bonus'
                 const schedule = [
@@ -462,7 +461,7 @@
                     usedImages: [],
                     poolType: 'main',
                     pendingGroups: null,
-                    selectionSchedule: this.createSelectionSchedule(),  // NEW: create random schedule
+                    selectionSchedule: this.createSelectionSchedule(),
                     currentScheduleIndex: 0
                 };
                 this.startNewNumber();
@@ -488,7 +487,6 @@
             },
 
             startNewNumber() {
-                // MODIFIED: Use the selection schedule instead of counting
                 const poolType = this.gameState.selectionSchedule[this.gameState.currentScheduleIndex];
                 
                 if (poolType === 'main') {
@@ -515,7 +513,6 @@
                     `Selecting number ${numbersSelected + 1} of 7 (Pool: ${poolName})`;
                 
                 if (pool.length === 1) {
-                    // MODIFIED: Store number with its pool type
                     this.gameState.selectedNumbers.push({
                         number: pool[0],
                         poolType: this.gameState.poolType
@@ -541,7 +538,13 @@
             },
 
             divideIntoGroups(pool, numGroups) {
-                const shuffled = [...pool].sort(() => Math.random() - 0.5);
+                // FIXED: Proper Fisher-Yates shuffle instead of biased sort
+                const shuffled = [...pool];
+                for (let i = shuffled.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                }
+                
                 const groupSize = Math.ceil(shuffled.length / numGroups);
                 const groups = [];
                 
@@ -627,7 +630,6 @@
             },
 
             async submitToGitHub() {
-                // MODIFIED: Separate and sort numbers by pool type
                 const mainNumbers = this.gameState.selectedNumbers
                     .filter(item => item.poolType === 'main')
                     .map(item => item.number)
@@ -678,7 +680,6 @@
                         // Could not parse error response
                     }
                     
-                    // Add helpful hints based on status code
                     if (response.status === 404) {
                         errorMessage += '\n\nTip: Check that your repository owner and name are correct.';
                     } else if (response.status === 401) {
@@ -724,7 +725,7 @@
                 
                 const allSelections = [];
                 const numberFrequency = { main: {}, bonus: {} };
-                const comboFrequency = {};  // NEW: Track combination frequencies
+                const comboFrequency = {};
                 
                 for (let i = 1; i <= 50; i++) numberFrequency.main[i] = 0;
                 for (let i = 1; i <= 12; i++) numberFrequency.bonus[i] = 0;
@@ -741,7 +742,6 @@
                         mainNumbers.forEach(num => numberFrequency.main[num]++);
                         bonusNumbers.forEach(num => numberFrequency.bonus[num]++);
                         
-                        // NEW: Track combination frequency
                         const comboKey = `${mainNumbers.join('-')} + ${bonusNumbers.join('-')}`;
                         comboFrequency[comboKey] = (comboFrequency[comboKey] || 0) + 1;
                     }
@@ -751,7 +751,6 @@
                 const expectedMainFreq = totalSelections * (5 / 50);
                 const expectedBonusFreq = totalSelections * (2 / 12);
                 
-                // MODIFIED: Extract current selection from stored objects
                 const mainNumbers = this.gameState.selectedNumbers
                     .filter(item => item.poolType === 'main')
                     .map(item => item.number)
@@ -767,7 +766,6 @@
                     bonus: bonusNumbers
                 };
                 
-                // NEW: Calculate top numbers by deviation
                 const mainDeviations = [];
                 for (let i = 1; i <= 50; i++) {
                     const actual = numberFrequency.main[i];
@@ -786,7 +784,6 @@
                 }
                 bonusDeviations.sort((a, b) => b.deviation - a.deviation);
                 
-                // NEW: Find combinations selected more than once
                 const duplicateCombos = Object.entries(comboFrequency)
                     .filter(([combo, count]) => count > 1)
                     .map(([combo, count]) => ({ combo, count }))
@@ -800,9 +797,9 @@
                     numberFrequency,
                     expectedMainFreq,
                     expectedBonusFreq,
-                    topMainNumbers: mainDeviations.slice(0, 5),  // NEW
-                    topBonusNumbers: bonusDeviations.slice(0, 2),  // NEW
-                    duplicateCombos  // NEW
+                    topMainNumbers: mainDeviations.slice(0, 5),
+                    topBonusNumbers: bonusDeviations.slice(0, 2),
+                    duplicateCombos
                 };
                 
                 currentSelection.main.forEach(num => {
@@ -848,7 +845,6 @@
                 let html = '<div class="results-section">';
                 html += '<h2>🎯 Your Selection Results</h2>';
                 
-                // Only show actual numbers if ALL 7 are above average
                 const allAboveAverage = analysis.aboveAverageCount === 7;
                 
                 if (allAboveAverage) {
@@ -860,7 +856,6 @@
                     html += '</div>';
                 }
                 
-                // Show statistics
                 html += '<div class="stat-item">';
                 html += `<strong>Total Selections in Database:</strong> ${analysis.totalSelections}`;
                 html += '</div>';
@@ -895,11 +890,9 @@
                 
                 html += '</div>';
                 
-                // NEW: Add statistics section
                 html += '<button class="toggle-stats-btn" onclick="app.toggleStatistics()">📊 View Detailed Statistics</button>';
                 html += '<div id="statisticsSection" class="statistics-section hidden">';
                 
-                // Duplicate combinations
                 html += '<h3>🔁 Combinations Selected More Than Once</h3>';
                 if (analysis.duplicateCombos.length > 0) {
                     analysis.duplicateCombos.forEach(item => {
@@ -913,7 +906,6 @@
                     html += '<div class="stat-item">No combinations have been selected more than once yet.</div>';
                 }
                 
-                // Top 5 main numbers
                 html += '<h3>📈 Top 5 Numbers (1-50) by Deviation from Average</h3>';
                 html += '<div class="stats-grid">';
                 analysis.topMainNumbers.forEach((item, index) => {
@@ -925,7 +917,6 @@
                 });
                 html += '</div>';
                 
-                // Top 2 bonus numbers
                 html += '<h3>🎲 Top 2 Bonus Numbers (1-12) by Deviation from Average</h3>';
                 html += '<div class="stats-grid">';
                 analysis.topBonusNumbers.forEach((item, index) => {
@@ -942,7 +933,6 @@
                 content.innerHTML = html;
             },
             
-            // NEW: Toggle statistics visibility
             toggleStatistics() {
                 const statsSection = document.getElementById('statisticsSection');
                 const btn = document.querySelector('.toggle-stats-btn');
@@ -977,4 +967,4 @@
         window.onload = () => app.init();
     </script>
 </body>
-</html>
+    </html>
