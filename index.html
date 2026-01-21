@@ -331,6 +331,19 @@
             color: #666;
             font-family: 'Segoe UI', sans-serif;
         }
+
+        .custom-marker {
+            background: transparent;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .leaflet-div-icon {
+            background: transparent;
+            border: none;
+        }
     </style>
 </head>
 <body>
@@ -438,7 +451,8 @@
 
             init() {
                 this.loadConfig();
-                if (this.config.owner && this.config.repo && this.config.targetId) {
+                if (this.config.owner && this.config.repo && this.config.targetId && 
+                    this.config.centerLat && this.config.centerLon) {
                     this.showTargetSection();
                 }
             },
@@ -642,30 +656,35 @@
             },
 
             digitsToCoordinate(digits) {
-                // First 6 digits: latitude (format: XX.XXXX)
-                // Last 6 digits: longitude (format: XX.XXXX)
+                // 5x5 km area = ±2500 meters from center
+                // 5 meter precision = 1000 possible positions per axis (5000m / 5m)
+                // We need to map our digits to a number 0-999 for each axis
+                
+                // First 6 digits for latitude offset, last 6 for longitude offset
                 const latDigits = digits.slice(0, 6);
                 const lonDigits = digits.slice(6, 12);
                 
-                // Construct latitude: ±2.5 km = ±0.0225 degrees approximately
-                // Center lat integer part
-                const centerLatInt = Math.floor(Math.abs(this.config.centerLat));
-                const latSign = this.config.centerLat >= 0 ? 1 : -1;
+                // Convert 6 digits to number 0-999999, then map to 0-999
+                const latNumber = latDigits.reduce((acc, digit) => acc * 10 + digit, 0);
+                const lonNumber = lonDigits.reduce((acc, digit) => acc * 10 + digit, 0);
                 
-                // Use selected digits to create offset within range
-                const latIntPart = (latDigits[0] * 10 + latDigits[1]) % 5; // 0-4
-                const latDecPart = latDigits[2] * 1000 + latDigits[3] * 100 + latDigits[4] * 10 + latDigits[5];
-                const latOffset = (latIntPart * 10000 + latDecPart) / 100000; // 0.00000 to 0.04999
-                const lat = latSign * (centerLatInt + (this.config.centerLat % 1) + (latOffset - 0.025));
+                // Map to 0-999 range (1000 possible positions)
+                const latIndex = latNumber % 1000;
+                const lonIndex = lonNumber % 1000;
                 
-                // Construct longitude similarly
-                const centerLonInt = Math.floor(Math.abs(this.config.centerLon));
-                const lonSign = this.config.centerLon >= 0 ? 1 : -1;
+                // Convert to meters offset: -2500 to +2495 (step of 5m)
+                // 0 → -2500m, 500 → 0m, 999 → +2495m
+                const latOffsetMeters = (latIndex * 5) - 2500;
+                const lonOffsetMeters = (lonIndex * 5) - 2500;
                 
-                const lonIntPart = (lonDigits[0] * 10 + lonDigits[1]) % 5; // 0-4
-                const lonDecPart = lonDigits[2] * 1000 + lonDigits[3] * 100 + lonDigits[4] * 10 + lonDigits[5];
-                const lonOffset = (lonIntPart * 10000 + lonDecPart) / 100000;
-                const lon = lonSign * (centerLonInt + (this.config.centerLon % 1) + (lonOffset - 0.025));
+                // Convert meters to degrees
+                // At equator: 1 degree latitude ≈ 111,320 meters
+                // Longitude varies by latitude: 1 degree ≈ 111,320 * cos(latitude) meters
+                const latOffsetDegrees = latOffsetMeters / 111320;
+                const lonOffsetDegrees = lonOffsetMeters / (111320 * Math.cos(this.config.centerLat * Math.PI / 180));
+                
+                const lat = this.config.centerLat + latOffsetDegrees;
+                const lon = this.config.centerLon + lonOffsetDegrees;
                 
                 return { lat, lon };
             },
@@ -836,13 +855,31 @@
                     attribution: '© OpenStreetMap contributors'
                 }).addTo(map);
                 
-                // Add center point marker
-                L.circle([analysis.centerLat, analysis.centerLon], {
-                    color: 'blue',
+                // Add 5x5 km boundary rectangle
+                const kmToDegLat = 2.5 / 111.32; // More precise: 111.32 km per degree
+                const kmToDegLon = 2.5 / (111.32 * Math.cos(analysis.centerLat * Math.PI / 180));
+                
+                const bounds = [
+                    [analysis.centerLat - kmToDegLat, analysis.centerLon - kmToDegLon],
+                    [analysis.centerLat + kmToDegLat, analysis.centerLon + kmToDegLon]
+                ];
+                
+                L.rectangle(bounds, {
+                    color: '#1e3c72',
                     fillColor: '#3388ff',
-                    fillOpacity: 0.2,
-                    radius: 2500 // 2.5 km radius
-                }).addTo(map).bindPopup('Target Center (5×5 km area)');
+                    fillOpacity: 0.1,
+                    weight: 2
+                }).addTo(map).bindPopup('5×5 km Selection Area');
+                
+                // Add center point marker
+                L.marker([analysis.centerLat, analysis.centerLon], {
+                    icon: L.divIcon({
+                        className: 'custom-marker',
+                        html: '<div style="font-size: 24px; text-align: center;">⊕</div>',
+                        iconSize: [30, 30]
+                    })
+                }).addTo(map).bindPopup('<strong>Target Center Point</strong><br>' + 
+                    analysis.centerLat.toFixed(6) + ', ' + analysis.centerLon.toFixed(6));
                 
                 // Add all coordinate markers
                 analysis.allCoordinates.forEach((coord, index) => {
@@ -852,7 +889,7 @@
                     const marker = L.marker([coord.lat, coord.lon], {
                         icon: L.divIcon({
                             className: 'custom-marker',
-                            html: isCurrent ? '🎯' : '📍',
+                            html: `<div style="font-size: 24px; text-align: center;">${isCurrent ? '🎯' : '📍'}</div>`,
                             iconSize: [30, 30]
                         })
                     }).addTo(map);
